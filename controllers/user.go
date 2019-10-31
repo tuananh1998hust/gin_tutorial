@@ -2,17 +2,16 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-	"github.com/tuananh1998hust/gin_tutorial/config"
 	"github.com/tuananh1998hust/gin_tutorial/models"
 	"github.com/tuananh1998hust/gin_tutorial/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -33,9 +32,16 @@ func CreateUser(c *gin.Context) {
 	if err == mongo.ErrNoDocuments {
 		name := c.PostForm("name")
 		password := c.PostForm("password")
-		password, err = utils.HashPassword(password)
-		createdAt := time.Now()
-		updatedAt := time.Now()
+
+		if len(password) < 6 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Password is must unless 6 characters",
+			})
+
+			return
+		}
+
+		password, _ = utils.HashPassword(password)
 
 		if email == "" || name == "" || password == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -44,41 +50,22 @@ func CreateUser(c *gin.Context) {
 			return
 		}
 
-		if len(password) < 6 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Password is must unless 6 characters",
-			})
-		}
+		var newUser models.User
+
+		id, err := newUser.CreateUser(name, email, password)
 
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
+
 			return
 		}
-
-		id, err := models.UserCollection.InsertOne(context.TODO(), bson.M{
-			"name":      name,
-			"email":     email,
-			"password":  password,
-			"createdAt": createdAt,
-			"updatedAt": updatedAt,
-		})
-
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-
 		c.JSON(http.StatusCreated, gin.H{
-			"id":        id.InsertedID,
-			"name":      name,
-			"email":     email,
-			"password":  password,
-			"createdAt": createdAt,
-			"updatedAt": updatedAt,
+			"id":       id.InsertedID,
+			"name":     name,
+			"email":    email,
+			"password": password,
 		})
 	}
 }
@@ -96,58 +83,94 @@ func GetUser(c *gin.Context) {
 		return
 	}
 
-	token := splitToken[1]
+	decode := utils.DecodeToken(c)
 
-	// at(time.Unix(0, 0), func() {
-	// 	decode, _ := jwt.ParseWithClaims(token, &utils.Token{}, func(decode *jwt.Token) (interface{}, error) {
-	// 		secret := config.Key.SecretOrKey
-	// 		return []byte(secret), nil
-	// 	})
+	if claims, ok := decode.Claims.(*utils.Token); ok && decode.Valid {
+		var findUser models.User
+		findUser, err := findUser.FindUserByID(claims.ID)
 
-	// 	c.JSON(http.StatusOK, gin.H{
-	// 		"data": decode,
-	// 	})
-	// })
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "User not found",
+			})
 
-	decode, _ := jwt.ParseWithClaims(token, &utils.Token{}, func(decode *jwt.Token) (interface{}, error) {
-		secret := config.Key.SecretOrKey
-		return []byte(secret), nil
-	})
+			return
+		}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": decode,
-	})
-
-	// if claims, ok := decode.Claims.(*utils.Token); ok && decode.Valid {
-	// 	log.Print(claims)
-	// 	var findUser models.User
-	// 	err := models.UserCollection.FindOne(context.TODO(), bson.D{bson.E{Key: "_id", Value: claims.ID}}).Decode(&findUser)
-
-	// 	if err == mongo.ErrNoDocuments {
-	// 		c.JSON(http.StatusBadRequest, gin.H{
-	// 			"error": "User not found",
-	// 		})
-
-	// 		return
-	// 	}
-
-	// 	c.JSON(http.StatusOK, gin.H{
-	// 		"_id":   findUser.ID,
-	// 		"name":  findUser.Name,
-	// 		"email": findUser.Email,
-	// 	})
-	// } else {
-	// 	log.Print("HEllo")
-	// 	c.JSON(http.StatusUnauthorized, gin.H{
-	// 		"error": "UnAuthorization",
-	// 	})
-	// }
+		c.JSON(http.StatusOK, gin.H{
+			"_id":   findUser.ID,
+			"name":  findUser.Name,
+			"email": findUser.Email,
+		})
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Token is not valid",
+		})
+	}
 }
 
-func at(t time.Time, f func()) {
-	jwt.TimeFunc = func() time.Time {
-		return t
+// UpdateUser :
+func UpdateUser(c *gin.Context) {
+	name := c.PostForm("name")
+
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Please fill all the fields",
+		})
+
+		return
 	}
-	f()
-	jwt.TimeFunc = time.Now
+
+	bearerToken := c.GetHeader("Authorization")
+
+	splitToken := strings.Split(bearerToken, " ")
+
+	if len(splitToken) != 2 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Token is not valid",
+		})
+		return
+	}
+
+	decode := utils.DecodeToken(c)
+
+	if claims, ok := decode.Claims.(*utils.Token); ok && decode.Valid {
+		var findUser models.User
+		findUser, err := findUser.FindUserByID(claims.ID)
+
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "User not found",
+			})
+
+			return
+		}
+
+		paramID := c.Param("id")
+		id, _ := primitive.ObjectIDFromHex(paramID)
+
+		var updateUser models.User
+
+		updateUser, err = updateUser.UpdateUser(id, name)
+
+		log.Println(updateUser)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":    updateUser.ID,
+			"name":  name,
+			"email": updateUser.Email,
+		})
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Token is not valid",
+		})
+	}
 }
