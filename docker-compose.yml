@@ -9,19 +9,18 @@ services:
       - ./db:/data/db
     networks:
       - ginapi
-
-  api:
-    container_name: gin_tutorial
-    build: .
-    ports:
-      - 8080:8080
-    networks:
-      - ginapi
-    depends_on:
-      - db
-    environment:
-      DBHOST: "mongodb://db"
-      SECRETORKEY: "secretOrKey"
+  # api:
+  #   container_name: gin_tutorial
+  #   build: .
+  #   ports:
+  #     - 8080:8080
+  #   networks:
+  #     - ginapi
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     DBHOST: "mongodb://db"
+  #     SECRETORKEY: "secretOrKey"
 
 networks:
   ginapi:

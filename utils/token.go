@@ -2,8 +2,9 @@ package utils
 
 import (
 	"log"
+	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go"
 	config "github.com/tuananh1998hust/gin_tutorial/config"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -36,15 +37,30 @@ func ComparePassword(password, hash string) bool {
 }
 
 // GenerateToken :
-func GenerateToken(userID primitive.ObjectID, email, name string) string {
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), Token{
-		ID:    userID,
-		Email: email,
-		Name:  name,
-	})
+func GenerateToken(userID primitive.ObjectID, email, name string) (string, error) {
+	claims := Token{
+		userID,
+		"email",
+		"name",
+		jwt.StandardClaims{
+			Issuer:    "test",
+			ExpiresAt: time.Now().Unix() + 90,
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	secret := config.Key.SecretOrKey
 
-	tokenString, _ := token.SignedString([]byte(secret))
-	return tokenString
+	tokenString, err := token.SignedString([]byte(secret))
+
+	if err != nil {
+		log.Print(err)
+	}
+
+	return tokenString, nil
+}
+
+// DecodeToken :
+func DecodeToken() {
+
 }

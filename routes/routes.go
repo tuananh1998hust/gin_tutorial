@@ -1,9 +1,8 @@
 package routes
 
 import (
-	"github.com/tuananh1998hust/gin_tutorial/controllers"
-
 	"github.com/gin-gonic/gin"
+	"github.com/tuananh1998hust/gin_tutorial/controllers"
 )
 
 // SetUpRoutes :
@@ -18,6 +17,7 @@ func SetUpRoutes() *gin.Engine {
 		// Auth API
 		v1.POST("/auth/register", controllers.CreateUser)
 		v1.POST("auth/login", controllers.Login)
+		v1.GET("/user", controllers.GetUser)
 	}
 
 	return r

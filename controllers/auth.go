@@ -44,7 +44,7 @@ func Login(c *gin.Context) {
 			return
 		}
 
-		token := utils.GenerateToken(findUserByEmail.ID, findUserByEmail.Email, findUserByEmail.Name)
+		token, _ := utils.GenerateToken(findUserByEmail.ID, findUserByEmail.Email, findUserByEmail.Name)
 
 		c.JSON(http.StatusOK, gin.H{
 			"token": token,
